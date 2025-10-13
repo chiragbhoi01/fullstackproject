@@ -4,6 +4,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .env
+uploads/
 .DS_Store
 coverage/
 build/

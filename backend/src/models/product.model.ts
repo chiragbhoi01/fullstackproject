@@ -1,5 +1,5 @@
 import mongoose, { Schema } from "mongoose";
-import { isPromise } from "util/types";
+
 export interface IProduct extends Document {
     name: string;
     category: "bridal" | "groom" | "party";
