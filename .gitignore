@@ -15,7 +15,7 @@ pids/
 *.seed
 *.log
 logs/
-
+Rajmahal/
 # React Frontend specific
 client/build/
 client/node_modules/
