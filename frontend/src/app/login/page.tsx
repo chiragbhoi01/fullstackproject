@@ -12,12 +12,22 @@ interface FormData {
 }
 
 interface LoginResponse {
-  user: { id: string; name: string; email: string; phone?: string; role: string };
+  user: {
+    _id: string;
+    name: string;
+    email: string;
+    phone?: string;
+    role: string;
+  };
   token: string;
 }
 
 export default function Login() {
-  const [formData, setFormData] = useState<FormData>({ email: "", password: "", rememberMe: false });
+  const [formData, setFormData] = useState<FormData>({
+    email: "",
+    password: "",
+    rememberMe: false,
+  });
   const [errors, setErrors] = useState<Partial<FormData>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -26,53 +36,71 @@ export default function Login() {
   const validateForm = () => {
     const newErrors: Partial<FormData> = {};
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(formData.email)) newErrors.email = "Enter a valid email";
-    const passwordRegex = /^(?=.*[0-9])(?=.*[!@#$%^&*])[a-zA-Z0-9!@#$%^&*]{6,}$/;
-    if (!passwordRegex.test(formData.password))
-      newErrors.password = "Password must be at least 6 characters with a number and special character";
+    if (!formData.email.trim()) {
+      newErrors.email = "Email is required";
+    } else if (!emailRegex.test(formData.email)) {
+      newErrors.email = "Enter a valid email";
+    }
+
+    if (!formData.password.trim()) {
+      newErrors.password = "Password is required";
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
-    if (validateForm()) {
-      try {
-        const response = await api.post<LoginResponse>("/login", {
-          email: formData.email,
-          password: formData.password,
-          rememberMe: formData.rememberMe,
-        });
-        if (response.status !== 200) throw new Error("Login failed");
 
-        // Store token based on rememberMe
-        if (formData.rememberMe) {
-          localStorage.setItem("token", response.data.token);
-        } else {
-          sessionStorage.setItem("token", response.data.token);
-        }
-
-        setFormData({ email: "", password: "", rememberMe: false });
-        router.push("/dashboard");
-      } catch (error: any) {
-        const message =
-          error.response?.data?.message || "Invalid email or password. Please try again.";
-        setErrors({ email: message });
-      }
+    if (!validateForm()) {
+      return;
     }
-    setIsLoading(false);
+
+    setIsLoading(true);
+    setErrors({});
+
+    try {
+      const response = await api.post<LoginResponse>("/auth/login", {
+        email: formData.email,
+        password: formData.password,
+      });
+
+      // Store token based on rememberMe
+      const storage = formData.rememberMe ? localStorage : sessionStorage;
+      storage.setItem("token", response.data.token);
+
+      // Optionally store user info
+      storage.setItem("user", JSON.stringify(response.data.user));
+
+      // Redirect based on role
+      if (response.data.user.role === "admin") {
+        router.push("/admin/dashboard");
+      } else {
+        router.push("/");
+      }
+    } catch (error: any) {
+      console.error("Login error:", error);
+      const message =
+        error.response?.data?.message ||
+        error.message ||
+        "Invalid email or password. Please try again.";
+      setErrors({ email: message });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: type === "checkbox" ? checked : value }));
-    setErrors((prev) => ({ ...prev, [name]: "" }));
-  };
-
-  const handleSocialLogin = (provider: string) => {
-    console.log(`Initiating ${provider} login`);
-    // Placeholder: Integrate with NextAuth.js or redirect to /api/auth/[provider]
+    setFormData((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value,
+    }));
+    // Clear error for this field
+    if (errors[name as keyof FormData]) {
+      setErrors((prev) => ({ ...prev, [name]: "" }));
+    }
   };
 
   return (
@@ -87,9 +115,13 @@ export default function Login() {
               Secure
             </span>
           </div>
-          <form className="space-y-6" onSubmit={handleSubmit} aria-live="polite">
+
+          <form className="space-y-6" onSubmit={handleSubmit}>
             <div>
-              <label htmlFor="email" className="text-sm text-gray-500 mb-1 block">
+              <label
+                htmlFor="email"
+                className="text-sm text-gray-500 mb-1 block"
+              >
                 Email Address
               </label>
               <Input
@@ -101,6 +133,7 @@ export default function Login() {
                 onChange={handleChange}
                 error={errors.email}
                 required
+                aria-describedby={errors.email ? "email-error" : undefined}
               />
               {errors.email && (
                 <p id="email-error" className="text-red-500 text-xs mt-1">
@@ -108,8 +141,12 @@ export default function Login() {
                 </p>
               )}
             </div>
+
             <div>
-              <label htmlFor="password" className="text-sm text-gray-500 mb-1 block">
+              <label
+                htmlFor="password"
+                className="text-sm text-gray-500 mb-1 block"
+              >
                 Password
               </label>
               <div className="relative">
@@ -122,13 +159,15 @@ export default function Login() {
                   onChange={handleChange}
                   error={errors.password}
                   required
+                  aria-describedby={
+                    errors.password ? "password-error" : undefined
+                  }
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
                   aria-label={showPassword ? "Hide password" : "Show password"}
-                  aria-controls="password"
                 >
                   {showPassword ? "🙈" : "👁️"}
                 </button>
@@ -139,26 +178,34 @@ export default function Login() {
                 </p>
               )}
             </div>
+
             <div className="flex items-center justify-between">
-              <label htmlFor="rememberMe" className="text-sm flex items-center">
+              <label
+                htmlFor="rememberMe"
+                className="text-sm flex items-center cursor-pointer"
+              >
                 <input
                   id="rememberMe"
                   name="rememberMe"
                   type="checkbox"
                   checked={formData.rememberMe}
                   onChange={handleChange}
-                  className="mr-2 h-4 w-4 text-teal-600 focus:ring-teal-500 border-gray-300 rounded"
+                  className="mr-2 h-4 w-4 text-teal-600 focus:ring-teal-500 border-gray-300 rounded cursor-pointer"
                 />
                 Remember me
               </label>
-              <Link href="/forgot-password" className="text-teal-600 text-sm underline hover:text-teal-700">
+              <Link
+                href="/forgot-password"
+                className="text-teal-600 text-sm underline hover:text-teal-700"
+              >
                 Forgot Password?
               </Link>
             </div>
+
             <button
               type="submit"
               disabled={isLoading}
-              className={`w-full bg-teal-600 hover:bg-teal-700 text-white py-3 rounded-md font-medium transition-opacity ${
+              className={`w-full bg-teal-600 hover:bg-teal-700 text-white py-3 rounded-md font-medium transition-all ${
                 isLoading ? "opacity-50 cursor-not-allowed" : ""
               }`}
             >
@@ -191,10 +238,13 @@ export default function Login() {
               )}
             </button>
           </form>
-         
+
           <p className="text-sm text-gray-500 mt-6 text-center">
-            Don’t have an account?{" "}
-            <Link href="/register" className="text-teal-600 underline hover:text-teal-700">
+            Don't have an account?{" "}
+            <Link
+              href="/register"
+              className="text-teal-600 underline hover:text-teal-700"
+            >
               Sign up
             </Link>
           </p>

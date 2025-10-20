@@ -8,6 +8,7 @@ uploads/
 .DS_Store
 coverage/
 build/
+Rajmahal/
 dist/
 tmp/
 pids/
@@ -15,7 +16,7 @@ pids/
 *.seed
 *.log
 logs/
-Rajmahal/
+
 # React Frontend specific
 client/build/
 client/node_modules/

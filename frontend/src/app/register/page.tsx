@@ -1,7 +1,9 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
-import { Input } from "@/components"; // Adjust the import path as needed
+import { useRouter } from "next/navigation";
+import { Input } from "@/components";
+import api from "@/utils/api";
 
 interface FormData {
   fullName: string;
@@ -9,6 +11,16 @@ interface FormData {
   password: string;
   confirmPassword: string;
   termsAccepted: boolean;
+}
+
+interface RegisterResponse {
+  user: {
+    _id: string;
+    name: string;
+    email: string;
+    role: string;
+  };
+  token: string;
 }
 
 export default function Register() {
@@ -22,20 +34,38 @@ export default function Register() {
   const [errors, setErrors] = useState<Partial<FormData>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const router = useRouter();
 
   const validateForm = () => {
     const newErrors: Partial<FormData> = {};
-    if (!formData.fullName.trim()) newErrors.fullName = "Full name is required";
+
+    if (!formData.fullName.trim()) {
+      newErrors.fullName = "Full name is required";
+    }
+
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(formData.email))
+    if (!formData.email.trim()) {
+      newErrors.email = "Email is required";
+    } else if (!emailRegex.test(formData.email)) {
       newErrors.email = "Enter a valid email";
+    }
+
     const passwordRegex =
       /^(?=.*[0-9])(?=.*[!@#$%^&*])[a-zA-Z0-9!@#$%^&*]{6,}$/;
-    if (!passwordRegex.test(formData.password))
+    if (!formData.password.trim()) {
+      newErrors.password = "Password is required";
+    } else if (!passwordRegex.test(formData.password)) {
       newErrors.password =
         "Password must be at least 6 characters with a number and special character";
-    if (formData.password !== formData.confirmPassword)
+    }
+
+    if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = "Passwords do not match";
+    }
+
+    if (!formData.termsAccepted) {
+      // newErrors.termsAccepted = "You must accept the terms and conditions";
+    }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -43,25 +73,52 @@ export default function Register() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
-    if (validateForm()) {
-      try {
-        // Simulate API call
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        console.log("Form submitted:", formData);
-        // Reset form or redirect as needed
-        setFormData({
-          fullName: "",
-          email: "",
-          password: "",
-          confirmPassword: "",
-          termsAccepted: false,
-        });
-      } catch (error) {
-        setErrors({ email: "An error occurred. Please try again." });
-      }
+
+    if (!validateForm()) {
+      return;
     }
-    setIsLoading(false);
+
+    setIsLoading(true);
+    setErrors({});
+
+    try {
+      const response = await api.post<RegisterResponse>("/auth/register", {
+        name: formData.fullName,
+        email: formData.email,
+        password: formData.password,
+      });
+
+      // Store token in localStorage by default for registration
+      localStorage.setItem("token", response.data.token);
+      localStorage.setItem("user", JSON.stringify(response.data.user));
+
+      // Reset form
+      setFormData({
+        fullName: "",
+        email: "",
+        password: "",
+        confirmPassword: "",
+        termsAccepted: false,
+      });
+
+      // Redirect to dashboard or onboarding
+      router.push("/dashboard");
+    } catch (error: any) {
+      console.error("Registration error:", error);
+      const message =
+        error.response?.data?.message ||
+        error.message ||
+        "An error occurred during registration. Please try again.";
+
+      // Check if it's an email already exists error
+      if (message.toLowerCase().includes("already exists")) {
+        setErrors({ email: message });
+      } else {
+        setErrors({ email: message });
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -70,7 +127,10 @@ export default function Register() {
       ...prev,
       [name]: type === "checkbox" ? checked : value,
     }));
-    setErrors((prev) => ({ ...prev, [name]: "" }));
+    // Clear error for this field
+    if (errors[name as keyof FormData]) {
+      setErrors((prev) => ({ ...prev, [name]: "" }));
+    }
   };
 
   return (
@@ -88,6 +148,7 @@ export default function Register() {
           <p className="text-sm text-gray-500 mb-6">
             Join Rajmahal to rent your dream outfit
           </p>
+
           <form className="space-y-6" onSubmit={handleSubmit}>
             <div>
               <label
@@ -105,6 +166,9 @@ export default function Register() {
                 onChange={handleChange}
                 error={errors.fullName}
                 required
+                aria-describedby={
+                  errors.fullName ? "fullName-error" : undefined
+                }
               />
               {errors.fullName && (
                 <p id="fullName-error" className="text-red-500 text-xs mt-1">
@@ -112,6 +176,7 @@ export default function Register() {
                 </p>
               )}
             </div>
+
             <div>
               <label
                 htmlFor="email"
@@ -128,6 +193,7 @@ export default function Register() {
                 onChange={handleChange}
                 error={errors.email}
                 required
+                aria-describedby={errors.email ? "email-error" : undefined}
               />
               {errors.email && (
                 <p id="email-error" className="text-red-500 text-xs mt-1">
@@ -135,6 +201,7 @@ export default function Register() {
                 </p>
               )}
             </div>
+
             <div>
               <label
                 htmlFor="password"
@@ -152,14 +219,15 @@ export default function Register() {
                   onChange={handleChange}
                   error={errors.password}
                   required
-                  aria-controls="password"
+                  aria-describedby={
+                    errors.password ? "password-error" : undefined
+                  }
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
                   aria-label={showPassword ? "Hide password" : "Show password"}
-                  aria-controls="password confirmPassword"
                 >
                   {showPassword ? "🙈" : "👁️"}
                 </button>
@@ -170,6 +238,7 @@ export default function Register() {
                 </p>
               )}
             </div>
+
             <div>
               <label
                 htmlFor="confirmPassword"
@@ -187,14 +256,15 @@ export default function Register() {
                   onChange={handleChange}
                   error={errors.confirmPassword}
                   required
-                  aria-controls="confirmPassword"
+                  aria-describedby={
+                    errors.confirmPassword ? "confirmPassword-error" : undefined
+                  }
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
                   aria-label={showPassword ? "Hide password" : "Show password"}
-                  aria-controls="password confirmPassword"
                 >
                   {showPassword ? "🙈" : "👁️"}
                 </button>
@@ -208,37 +278,44 @@ export default function Register() {
                 </p>
               )}
             </div>
-            <div className="flex items-center">
-              <input
-                id="termsAccepted"
-                name="termsAccepted"
-                type="checkbox"
-                checked={formData.termsAccepted}
-                onChange={handleChange}
-                className="mr-2 h-4 w-4 text-teal-600 focus:ring-teal-500 border-gray-300 rounded"
-                aria-describedby={
-                  errors.termsAccepted ? "terms-error" : undefined
-                }
-              />
-              <label htmlFor="termsAccepted" className="text-sm text-gray-500">
-                I agree to the{" "}
-                <Link
-                  href="/terms"
-                  className="text-teal-600 underline hover:text-teal-700"
+
+            <div>
+              <div className="flex items-start">
+                <input
+                  id="termsAccepted"
+                  name="termsAccepted"
+                  type="checkbox"
+                  checked={formData.termsAccepted}
+                  onChange={handleChange}
+                  className="mr-2 h-4 w-4 mt-0.5 text-teal-600 focus:ring-teal-500 border-gray-300 rounded cursor-pointer"
+                  aria-describedby={
+                    errors.termsAccepted ? "terms-error" : undefined
+                  }
+                />
+                <label
+                  htmlFor="termsAccepted"
+                  className="text-sm text-gray-500 cursor-pointer"
                 >
-                  Terms and Conditions
-                </Link>
-              </label>
+                  I agree to the{" "}
+                  <Link
+                    href="/terms"
+                    className="text-teal-600 underline hover:text-teal-700"
+                  >
+                    Terms and Conditions
+                  </Link>
+                </label>
+              </div>
+              {errors.termsAccepted && (
+                <p id="terms-error" className="text-red-500 text-xs mt-1 ml-6">
+                  {errors.termsAccepted}
+                </p>
+              )}
             </div>
-            {errors.termsAccepted && (
-              <p id="terms-error" className="text-red-500 text-xs mt-1">
-                {errors.termsAccepted}
-              </p>
-            )}
+
             <button
               type="submit"
               disabled={isLoading}
-              className={`w-full bg-teal-600 hover:bg-teal-700 text-white py-3 rounded-md font-medium transition-opacity ${
+              className={`w-full bg-teal-600 hover:bg-teal-700 text-white py-3 rounded-md font-medium transition-all ${
                 isLoading ? "opacity-50 cursor-not-allowed" : ""
               }`}
             >
@@ -271,7 +348,7 @@ export default function Register() {
               )}
             </button>
           </form>
-        
+
           <p className="text-sm text-gray-500 mt-6 text-center">
             Already have an account?{" "}
             <Link
