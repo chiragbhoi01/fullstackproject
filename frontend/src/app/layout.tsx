@@ -1,5 +1,5 @@
 import "../styles/globals.css";
-import Navbar from "@/components/Header";
+import {Header} from "@/components"
 import { Space_Grotesk } from "next/font/google";
 
 export const metadata = {
@@ -15,7 +15,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className={` ${spaceGrotesk.className} font-family: 'Space Grotesk', sans-serif;`}>
-        <Navbar />
+        <Header />
         {children}
       </body>
     </html>

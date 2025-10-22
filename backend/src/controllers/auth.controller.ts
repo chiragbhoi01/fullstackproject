@@ -11,7 +11,7 @@ export const register = async (req: Request, res: Response) => {
     const existing = await User.findOne({ email });
     if (existing) return res.status(400).json({ message: "User already exists" });
 
-    const user = await User.create({ name, email, password, role : req.body.role || "user" });
+    const user = await User.create({ name, email, password, role: req.body.role || "user" });
     const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: "7d" });
 
     res.status(201).json({ user, token });
@@ -20,7 +20,6 @@ export const register = async (req: Request, res: Response) => {
   }
 };
 
-// 🔑 Login
 export const login = async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
@@ -30,13 +29,17 @@ export const login = async (req: Request, res: Response) => {
     const isMatch = await user.comparePassword(password);
     if (!isMatch) return res.status(400).json({ message: "Wrong password" });
 
-    const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, { expiresIn: "7d" });
+    const token = jwt.sign(
+      { id: user._id, role: user.role },
+      JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
     res.json({ user, token });
   } catch (err) {
-    res.status(500).json({ error: err });
+    res.status(500).json({ message: "Login error", error: err });
   }
 };
-
 // 👤 Profile
 export const profile = async (req: any, res: Response) => {
   try {

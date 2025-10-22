@@ -1,9 +1,11 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useCallback, useState } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { FiMenu, FiX } from "react-icons/fi";
 import { MdSupervisorAccount } from "react-icons/md";
+import Button from "./Button";
+import { useLogout } from "@/hooks/useLogout"; // Your hook for logout
 
 interface NavTab {
   href: string;
@@ -17,7 +19,12 @@ interface HButtonProps {
   icon?: React.ReactNode;
 }
 
-const HeaderButton = ({ children, isActive = false, className = "", icon }: HButtonProps) => {
+const HeaderButton = ({
+  children,
+  isActive = false,
+  className = "",
+  icon,
+}: HButtonProps) => {
   return (
     <button
       className={`flex items-center font-['Space_Grotesk',sans-serif] rounded-2xl px-4 py-2 transition-colors ${
@@ -31,9 +38,11 @@ const HeaderButton = ({ children, isActive = false, className = "", icon }: HBut
   );
 };
 
-export default function Navbar() {
+export default function Header() {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [user, setUser] = useState<any>(null);
+  const logout = useLogout();
 
   const navTabs: NavTab[] = [
     { href: "/", label: "Home" },
@@ -45,13 +54,14 @@ export default function Navbar() {
     { href: "/contact", label: "Contact" },
   ];
 
+  useEffect(() => {
+    const storedUser = localStorage.getItem("user");
+    setUser(storedUser ? JSON.parse(storedUser) : null);
+  }, []);
+
   const toggleMobileMenu = useCallback(() => {
     setMobileMenuOpen((prev) => !prev);
   }, []);
-
-  // Determine Account button label based on pathname
-  const accountLabel = pathname === "/login" ? "Register" : pathname === "/register" ? "Login" : "Account";
-  const accountHref = pathname === "/login" ? "/register" : pathname === "/register" ? "/login" : "/login";
 
   return (
     <nav className="bg-white shadow-md sticky top-0 z-50 px-6 py-4 md:px-8 flex items-center justify-between font-['Space_Grotesk',sans-serif]">
@@ -61,17 +71,36 @@ export default function Navbar() {
       </Link>
 
       {/* Desktop Menu */}
-      <div className="hidden md:flex space-x-6 text-gray-700 font-medium">
+      <div className="hidden md:flex space-x-6 text-gray-700 font-medium items-center">
         {navTabs.map(({ href, label }) => (
           <Link key={href} href={href}>
             <HeaderButton isActive={pathname === href}>{label}</HeaderButton>
           </Link>
         ))}
-        <Link href={accountHref}>
-          <HeaderButton icon={<MdSupervisorAccount />} isActive={pathname === "/login" || pathname === "/register"}>
-            {accountLabel}
-          </HeaderButton>
-        </Link>
+
+        {user ? (
+          <>
+            <span className="text-teal-700 font-medium flex items-center mr-2">
+              Hello, {user.name}
+            </span>
+            <Button onClick={logout} className="bg-red-600 hover:bg-red-700">
+              Logout
+            </Button>
+          </>
+        ) : (
+          <Link href={pathname === "/login" ? "/register" : "/login"}>
+            <HeaderButton
+              icon={<MdSupervisorAccount />}
+              isActive={pathname === "/login" || pathname === "/register"}
+            >
+              {pathname === "/login"
+                ? "Register"
+                : pathname === "/register"
+                ? "Login"
+                : "Account"}
+            </HeaderButton>
+          </Link>
+        )}
       </div>
 
       {/* Mobile Menu Toggle */}
@@ -102,15 +131,41 @@ export default function Navbar() {
               </HeaderButton>
             </Link>
           ))}
-          <Link href={accountHref} onClick={toggleMobileMenu} className="px-6 py-1">
-            <HeaderButton
-              isActive={pathname === "/login" || pathname === "/register"}
-              className="w-full text-left"
-              icon={<MdSupervisorAccount />}
+
+          {user ? (
+            <div className="px-6 py-1 flex items-center space-x-2">
+              <span className="text-teal-700 font-medium">
+                Hello, {user.name}
+              </span>
+              <Button
+                onClick={() => {
+                  logout();
+                  setMobileMenuOpen(false);
+                }}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                Logout
+              </Button>
+            </div>
+          ) : (
+            <Link
+              href={pathname === "/login" ? "/register" : "/login"}
+              onClick={toggleMobileMenu}
+              className="px-6 py-1"
             >
-              {accountLabel}
-            </HeaderButton>
-          </Link>
+              <HeaderButton
+                isActive={pathname === "/login" || pathname === "/register"}
+                className="w-full text-left"
+                icon={<MdSupervisorAccount />}
+              >
+                {pathname === "/login"
+                  ? "Register"
+                  : pathname === "/register"
+                  ? "Login"
+                  : "Account"}
+              </HeaderButton>
+            </Link>
+          )}
         </div>
       )}
     </nav>
